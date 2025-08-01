@@ -1,27 +1,37 @@
 import torch
 import torch.nn.functional as F
 import copy
+import math 
+
 import comfy
 from comfy.ldm.modules.attention import optimized_attention
 
 def get_masks_from_q(masks, q, original_shape):
-    if original_shape[2] * original_shape[3] == q.shape[1]:
-        down_sample_rate = 1
-    elif (original_shape[2] // 2) * (original_shape[3] // 2) == q.shape[1]:
-        down_sample_rate = 2
-    elif (original_shape[2] // 4) * (original_shape[3] // 4) == q.shape[1]:
-        down_sample_rate = 4
-    else:
-        down_sample_rate = 8
+    H = original_shape[2]
+    W = original_shape[3]
+    seq_len = q.shape[1]
+
+    # 计算保持原始宽高比的目标空间维度
+    aspect_ratio = H / W
+    h_q = int(math.sqrt(seq_len * aspect_ratio))
+    w_q = int(seq_len / h_q)
+
+    # 精确调整以确保乘积等于序列长度
+    while h_q * w_q < seq_len:
+        h_q += 1
+        w_q = max(1, int(seq_len / h_q))
+    while h_q * w_q > seq_len:
+        h_q -= 1
+        w_q = max(1, int(seq_len / h_q))
 
     ret_masks = []
     for mask in masks:
         if isinstance(mask, torch.Tensor):
-            size = (original_shape[2] // down_sample_rate, original_shape[3] // down_sample_rate)
+            size = (h_q, w_q)
             mask_downsample = F.interpolate(mask.unsqueeze(0), size=size, mode="nearest")
-            mask_downsample = mask_downsample.view(1,-1, 1).repeat(q.shape[0], 1, q.shape[2])
+            mask_downsample = mask_downsample.view(1, -1, 1).repeat(q.shape[0], 1, q.shape[2])
             ret_masks.append(mask_downsample)
-        else:  # coupling処理なしの場合
+        else:  # 无耦合处理时
             ret_masks.append(torch.ones_like(q))
 
     ret_masks = torch.cat(ret_masks, dim=0)
@@ -49,6 +59,7 @@ class AttentionCouple:
             }
         }
     RETURN_TYPES = ("MODEL", "CONDITIONING", "CONDITIONING")
+    RETURN_NAMES = ("model", "positive", "negative")
     FUNCTION = "attention_couple"
     CATEGORY = "loaders"
 
@@ -116,9 +127,35 @@ class AttentionCouple:
             masks_uncond = get_masks_from_q(self.negative_positive_masks[0], q_list[0], extra_options["original_shape"])
             masks_cond = get_masks_from_q(self.negative_positive_masks[1], q_list[0], extra_options["original_shape"])
 
-            cond_size = self.negative_positive_conds[1][0].shape[1]
-            context_uncond = torch.cat([cond[:, :cond_size] for cond in self.negative_positive_conds[0]], dim=0)
-            context_cond = torch.cat([cond[:, :cond_size] for cond in self.negative_positive_conds[1]], dim=0)
+            ## Sizes of tensors must match except in dimension 0. Expected size 231 but got size 154 for tensor number 2 in the list.
+
+            # maxi_prompt_size_uncond = max([cond.shape[1] for cond in self.negative_positive_conds[0]])
+            # context_uncond = torch.cat([cond.repeat(1, maxi_prompt_size_uncond//cond.shape[1], 1) for cond in self.negative_positive_conds[0]], dim=0)
+
+            # maxi_prompt_size_cond = max([cond.shape[1] for cond in self.negative_positive_conds[1]])
+            # context_cond = torch.cat([cond.repeat(1, maxi_prompt_size_cond//cond.shape[1], 1) for cond in self.negative_positive_conds[1]], dim=0)
+            
+            # 替代方案：使用插值对齐维度
+            maxi_prompt_size_uncond = max([cond.shape[1] for cond in self.negative_positive_conds[0]])
+            context_uncond = torch.cat([
+                F.interpolate(
+                    cond.permute(0, 2, 1), 
+                    size=maxi_prompt_size_uncond, 
+                    mode='linear'
+                ).permute(0, 2, 1)
+                for cond in self.negative_positive_conds[0]
+            ], dim=0)
+
+            maxi_prompt_size_cond = max([cond.shape[1] for cond in self.negative_positive_conds[1]])
+            context_cond = torch.cat([
+                F.interpolate(
+                    cond.permute(0, 2, 1), 
+                    size=maxi_prompt_size_cond, 
+                    mode='linear'
+                ).permute(0, 2, 1)
+                for cond in self.negative_positive_conds[1]
+            ], dim=0)
+
 
             k_uncond = module.to_k(context_uncond)
             k_cond = module.to_k(context_cond)
@@ -161,6 +198,9 @@ class AttentionCouple:
         return patch
 
     def sharpen_masks(self, masks, isolation_factor):
+        if isolation_factor == 0:
+            return masks
+            
         # Convert isolation_factor to a tensor with the same device and dtype as masks
         isolation_factor_tensor = torch.tensor(isolation_factor, device=masks.device, dtype=masks.dtype)
         
@@ -171,11 +211,3 @@ class AttentionCouple:
         sharpened = sharpened / (sharpened.sum(dim=0, keepdim=True) + 1e-6)
         
         return sharpened
-
-NODE_CLASS_MAPPINGS = {
-    "Attention couple": AttentionCouple
-}
-
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "Attention couple": "Load Attention couple",
-}

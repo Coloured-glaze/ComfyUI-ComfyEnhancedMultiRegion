@@ -1,0 +1,628 @@
+{
+  "id": "74967d8f-1b3c-4bae-822f-676488b2b699",
+  "revision": 0,
+  "last_node_id": 32,
+  "last_link_id": 78,
+  "nodes": [
+    {
+      "id": 3,
+      "type": "KSampler",
+      "pos": [
+        865.14697265625,
+        -914.6146240234375
+      ],
+      "size": [
+        315,
+        475
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 76
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 77
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 78
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            7
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.45",
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        41,
+        "fixed",
+        24,
+        7,
+        "dpmpp_2m",
+        "simple",
+        1
+      ]
+    },
+    {
+      "id": 4,
+      "type": "CheckpointLoaderSimple",
+      "pos": [
+        -1001.7684326171875,
+        -888.3658447265625
+      ],
+      "size": [
+        354.219482421875,
+        101.63414764404297
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            66
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 1,
+          "links": [
+            67
+          ]
+        },
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "slot_index": 2,
+          "links": [
+            8
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.45",
+        "Node name for S&R": "CheckpointLoaderSimple"
+      },
+      "widgets_values": [
+        "models\\cocoWAI_Illustrious_v1-2.fp16.safetensors"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "EmptyLatentImage",
+      "pos": [
+        620.8521728515625,
+        -509.0702209472656
+      ],
+      "size": [
+        210,
+        106
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.45",
+        "Node name for S&R": "EmptyLatentImage"
+      },
+      "widgets_values": [
+        1024,
+        1024,
+        1
+      ]
+    },
+    {
+      "id": 6,
+      "type": "CLIPTextEncode",
+      "pos": [
+        -18.05006980895996,
+        -868.094482421875
+      ],
+      "size": [
+        425,
+        165
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 69
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            73
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.45",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "holding hands, sitting on ground, picnic, starry sky, fireworks, kamisato ayaka, tender, cute, heartwarming, blushing, forest lake, scenery, 2girl"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "CLIPTextEncode",
+      "pos": [
+        -21.064687728881836,
+        -1176.2586669921875
+      ],
+      "size": [
+        425,
+        165
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 71
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            75
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.45",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "(worst quality, low quality:1.2), (jpeg artifacts:1.2), (1boy, abs, muscular, rib:1.0), greyscale, monochrome, dusty sunbeams, trembling, motion lines, motion blur, emphasis lines, text, title, logo, signature, extra body parts, duplicated body parts, extra limbs, extra body parts, duplication, barcode, overexposed, low detailed"
+      ]
+    },
+    {
+      "id": 8,
+      "type": "VAEDecode",
+      "pos": [
+        1213.4659423828125,
+        -854.3032836914062
+      ],
+      "size": [
+        156.89028930664062,
+        46
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 7
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 8
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            65
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.45",
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 10,
+      "type": "CLIPTextEncode",
+      "pos": [
+        -18.361099243164062,
+        -651.6834716796875
+      ],
+      "size": [
+        425,
+        165
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 70
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            74
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.45",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        "holding hands, sitting on ground, picnic, starry sky, fireworks, \nlumine \\(genshin impact\\), tender, cute, heartwarming, blushing, forest lake, scenery, 2girl"
+      ]
+    },
+    {
+      "id": 29,
+      "type": "SaveImage",
+      "pos": [
+        1439.557861328125,
+        -872.96240234375
+      ],
+      "size": [
+        484.7493896484375,
+        498.2451171875
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 65
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.45",
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "ComfyUI"
+      ]
+    },
+    {
+      "id": 30,
+      "type": "LoraLoader",
+      "pos": [
+        -526.0457153320312,
+        -890
+      ],
+      "size": [
+        315,
+        126
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 66
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 67
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            72
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 1,
+          "links": [
+            69,
+            70,
+            71
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.45",
+        "Node name for S&R": "LoraLoader"
+      },
+      "widgets_values": [
+        "SDXL\\nyaliaXL_illokr_V6311P.safetensors",
+        0.5000000000000001,
+        0.5000000000000001
+      ]
+    },
+    {
+      "id": 32,
+      "type": "ComfyMultiRegion",
+      "pos": [
+        497.53826904296875,
+        -908.6798706054688
+      ],
+      "size": [
+        270,
+        334
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 72
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 75
+        },
+        {
+          "name": "positive_1",
+          "type": "CONDITIONING",
+          "link": 73
+        },
+        {
+          "name": "positive_2",
+          "type": "CONDITIONING",
+          "link": 74
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            76
+          ]
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            77
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "links": [
+            78
+          ]
+        }
+      ],
+      "properties": {
+        "aux_id": "neeltheninja/ComfyUI-ComfyEnhancedMultiRegion",
+        "ver": "5fd1ecf56d8a504c1318ceaabc5429840aa25189",
+        "Node name for S&R": "ComfyMultiRegion"
+      },
+      "widgets_values": [
+        "horizontal",
+        2,
+        1024,
+        1024,
+        0.5,
+        null,
+        0.5,
+        1,
+        0.5,
+        1
+      ],
+      "color": "#322",
+      "bgcolor": "#533"
+    }
+  ],
+  "links": [
+    [
+      2,
+      5,
+      0,
+      3,
+      3,
+      "LATENT"
+    ],
+    [
+      7,
+      3,
+      0,
+      8,
+      0,
+      "LATENT"
+    ],
+    [
+      8,
+      4,
+      2,
+      8,
+      1,
+      "VAE"
+    ],
+    [
+      65,
+      8,
+      0,
+      29,
+      0,
+      "IMAGE"
+    ],
+    [
+      66,
+      4,
+      0,
+      30,
+      0,
+      "MODEL"
+    ],
+    [
+      67,
+      4,
+      1,
+      30,
+      1,
+      "CLIP"
+    ],
+    [
+      69,
+      30,
+      1,
+      6,
+      0,
+      "CLIP"
+    ],
+    [
+      70,
+      30,
+      1,
+      10,
+      0,
+      "CLIP"
+    ],
+    [
+      71,
+      30,
+      1,
+      7,
+      0,
+      "CLIP"
+    ],
+    [
+      72,
+      30,
+      0,
+      32,
+      0,
+      "MODEL"
+    ],
+    [
+      73,
+      6,
+      0,
+      32,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      74,
+      10,
+      0,
+      32,
+      3,
+      "CONDITIONING"
+    ],
+    [
+      75,
+      7,
+      0,
+      32,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      76,
+      32,
+      0,
+      3,
+      0,
+      "MODEL"
+    ],
+    [
+      77,
+      32,
+      1,
+      3,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      78,
+      32,
+      2,
+      3,
+      2,
+      "CONDITIONING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9195202798492467,
+      "offset": [
+        773.2221800306799,
+        1394.4353098275994
+      ]
+    },
+    "frontendVersion": "1.23.4"
+  },
+  "version": 0.4
+}

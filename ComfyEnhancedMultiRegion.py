@@ -1,8 +1,17 @@
 import math
 import torch
 from nodes import MAX_RESOLUTION, ConditioningCombine, ConditioningSetMask
-from comfy_extras.nodes_mask import MaskComposite, SolidMask
 from .attention_couple import AttentionCouple
+
+
+def validate_size(width, height):
+    if width % 64 != 0 or height % 64 != 0:
+        # 自动对齐到最近合规尺寸
+        new_w = (width // 64 + 1) * 64
+        new_h = (height // 64 + 1) * 64
+        print(f"comfy_couple Adjusted size: {width}x{height} → {new_w}x{new_h}")
+        return new_w, new_h
+    return width, height
 
 class ComfyMultiRegion:
     @classmethod
@@ -18,13 +27,14 @@ class ComfyMultiRegion:
                 "isolation_factor": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
             },
             "optional": {
-                **{f"positive_{i+1}": ("CONDITIONING",) for i in range(10)},
-                **{f"ratio_{i+1}": ("FLOAT", {"default": 0.5, "min": 0, "max": 1.0, "step": 0.01}) for i in range(9)},
-                **{f"weight_{i+1}": ("FLOAT", {"default": 1.0, "min": 0, "max": 10.0, "step": 0.1}) for i in range(10)}
+                # **{f"positive_{i+1}": ("CONDITIONING",) for i in range(10)},
+                # **{f"ratio_{i+1}": ("FLOAT", {"default": 0.5, "min": 0, "max": 1.0, "step": 0.01}) for i in range(10)},
+                # **{f"weight_{i+1}": ("FLOAT", {"default": 1.0, "min": 0, "max": 10.0, "step": 0.1}) for i in range(10)}
             }
         }
 
     RETURN_TYPES = ("MODEL", "CONDITIONING", "CONDITIONING",)
+    RETURN_NAMES = ("model", "positive", "negative",)
     FUNCTION = "process"
     CATEGORY = "loaders"
 
@@ -43,6 +53,7 @@ class ComfyMultiRegion:
             ratios = [r / total for r in ratios]
 
             # Create masks for each region
+            width, height = validate_size(width, height)
             masks = self.create_masks(ratios, orientation, width, height)
 
             # Apply masks and weights to positive conditionings
@@ -77,10 +88,97 @@ class ComfyMultiRegion:
 
         return masks
 
+class ComfyCoupleRegion:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "positive": ("CONDITIONING",),
+                "mask": ("MASK",),
+                "weight": (
+                    "FLOAT",
+                    {"default": 1.0, "min": 0.01, "max": 1.0, "step": 0.01},
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("ATTENTION_COUPLE_REGION",)
+    RETURN_NAMES = ("region",)
+    FUNCTION = "process"
+    CATEGORY = "loaders"
+
+    def process(self, positive, mask, weight):
+        return ({"positive": positive, "mask": mask, "weight": weight},)
+
+class ComfyCoupleMask:
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "negative": ("CONDITIONING",),
+                "isolation_factor": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "inputcount": ("INT", {"default": 2, "min": 2, "max": 256, "step": 1}),
+                "region_1": ("ATTENTION_COUPLE_REGION", ),
+                "region_2": ("ATTENTION_COUPLE_REGION", ),
+
+            }
+        }
+
+    RETURN_TYPES = (
+        "MODEL",
+        "CONDITIONING",
+        "CONDITIONING",
+    )
+    RETURN_NAMES = ("model", "positive", "negative")
+    FUNCTION = "process"
+    CATEGORY = "loaders"
+
+    def process(
+            self, 
+            model, 
+            inputcount, 
+            negative, 
+            isolation_factor,
+            **kwargs
+    ):
+
+        first_cond = kwargs["region_1"]
+
+        base_mask = torch.full(first_cond["mask"].shape, 1.0, dtype=torch.float32, device="cpu")
+
+        positive_combined = ConditioningSetMask().append(first_cond["positive"], first_cond["mask"], "default", 1.0)[0]
+
+        for c in range(1, inputcount):
+
+            new_cond = kwargs[f"region_{c + 1}"]
+
+            base_mask = base_mask - new_cond["mask"]
+
+            conditioning_mask_second = ConditioningSetMask().append(new_cond["positive"], new_cond["mask"], "default", 1.0)[0]
+
+
+            positive_combined = ConditioningCombine().combine(positive_combined, conditioning_mask_second)[0]
+
+        conditioning_mask_base = ConditioningSetMask().append(kwargs["region_1"]["positive"], base_mask, "default", 1.0)[0]
+
+        positive_combined = ConditioningCombine().combine(positive_combined, conditioning_mask_base)[0]
+
+        return AttentionCouple().attention_couple(model, positive_combined, negative, "Attention", isolation_factor)
+
+    
 NODE_CLASS_MAPPINGS = {
-    "Comfy Multi-Region": ComfyMultiRegion
+    "Attention couple": AttentionCouple,
+    "ComfyMultiRegion": ComfyMultiRegion,
+    "ComfyCoupleMask": ComfyCoupleMask,
+    "ComfyCoupleRegion": ComfyCoupleRegion,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "Comfy Multi-Region": "Comfy Multi-Region",
+    "Attention couple": "Comfy Attention couple",
+    "ComfyMultiRegion": "Comfy Multi Region",
+    "ComfyCoupleMask": "Comfy Couple Mask",
+    "ComfyCoupleRegion": "Comfy Couple Region",
 }
