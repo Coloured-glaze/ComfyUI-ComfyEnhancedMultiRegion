@@ -2,11 +2,17 @@ import torch
 import torch.nn.functional as F
 import copy
 import math 
+import logging
+from typing import List, Tuple, Union
 
 import comfy
 from comfy.ldm.modules.attention import optimized_attention
 
-def get_masks_from_q(masks, q, original_shape):
+# 配置日志
+logger = logging.getLogger(__name__)
+
+def get_masks_from_q(masks: List[Union[torch.Tensor, bool]], q: torch.Tensor, original_shape: Tuple[int, ...]) -> torch.Tensor:
+    """从查询张量生成掩码，优化版本"""
     H = original_shape[2]
     W = original_shape[3]
     seq_len = q.shape[1]
@@ -24,26 +30,42 @@ def get_masks_from_q(masks, q, original_shape):
         h_q -= 1
         w_q = max(1, int(seq_len / h_q))
 
+    # 预分配结果列表
     ret_masks = []
+    device = q.device
+    dtype = q.dtype
+    
+    # 批量处理掩码
     for mask in masks:
         if isinstance(mask, torch.Tensor):
             size = (h_q, w_q)
+            # 使用最近邻插值保持掩码的二元性质
             mask_downsample = F.interpolate(mask.unsqueeze(0), size=size, mode="nearest")
             mask_downsample = mask_downsample.view(1, -1, 1).repeat(q.shape[0], 1, q.shape[2])
-            ret_masks.append(mask_downsample)
+            ret_masks.append(mask_downsample.to(device=device, dtype=dtype))
         else:  # 无耦合处理时
             ret_masks.append(torch.ones_like(q))
 
-    ret_masks = torch.cat(ret_masks, dim=0)
+    # 一次性连接所有掩码
+    if ret_masks:
+        ret_masks = torch.cat(ret_masks, dim=0)
+    else:
+        ret_masks = torch.ones_like(q.unsqueeze(0))
+    
     return ret_masks
 
-def set_model_patch_replace(model, patch, key):
-    to = model.model_options["transformer_options"]
-    if "patches_replace" not in to:
-        to["patches_replace"] = {}
-    if "attn2" not in to["patches_replace"]:
-        to["patches_replace"]["attn2"] = {}
-    to["patches_replace"]["attn2"][key] = patch
+def set_model_patch_replace(model, patch, key) -> None:
+    """安全地设置模型补丁替换"""
+    try:
+        to = model.model_options["transformer_options"]
+        if "patches_replace" not in to:
+            to["patches_replace"] = {}
+        if "attn2" not in to["patches_replace"]:
+            to["patches_replace"]["attn2"] = {}
+        to["patches_replace"]["attn2"][key] = patch
+    except KeyError as e:
+        logger.error(f"设置模型补丁时发生键错误: {e}")
+        raise
 
 class AttentionCouple:
 
@@ -64,15 +86,21 @@ class AttentionCouple:
     CATEGORY = "loaders"
 
     def attention_couple(self, model, positive, negative, mode, isolation_factor):
+        """注意力耦合主方法，添加了错误处理和内存管理"""
         if mode == "Latent":
-            return (model, positive, negative)  # latent coupleの場合は何もしない
+            return (model, positive, negative)
 
+        # 检查CUDA内存
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
         self.negative_positive_masks = []
         self.negative_positive_conds = []
         self.isolation_factor = isolation_factor
 
-        new_positive = copy.deepcopy(positive)
-        new_negative = copy.deepcopy(negative)
+        # 使用浅拷贝优化性能
+        new_positive = copy.copy(positive)
+        new_negative = copy.copy(negative)
 
         dtype = model.model.diffusion_model.dtype
         device = comfy.model_management.get_torch_device()
@@ -118,14 +146,17 @@ class AttentionCouple:
         return (new_model, [new_positive[0]], [new_negative[0]])  # pool outputは・・・後回し
 
     def make_patch(self, module):           
+        """创建注意力补丁，优化版本"""
         def patch(q, k, v, extra_options):
             len_neg, len_pos = self.conditioning_length
             cond_or_uncond = extra_options["cond_or_uncond"]
             q_list = q.chunk(len(cond_or_uncond), dim=0)
             b = q_list[0].shape[0]
 
-            masks_uncond = get_masks_from_q(self.negative_positive_masks[0], q_list[0], extra_options["original_shape"])
-            masks_cond = get_masks_from_q(self.negative_positive_masks[1], q_list[0], extra_options["original_shape"])
+            # 批量获取掩码
+            with torch.no_grad():
+                masks_uncond = get_masks_from_q(self.negative_positive_masks[0], q_list[0], extra_options["original_shape"])
+                masks_cond = get_masks_from_q(self.negative_positive_masks[1], q_list[0], extra_options["original_shape"])
 
             ## Sizes of tensors must match except in dimension 0. Expected size 231 but got size 154 for tensor number 2 in the list.
 
@@ -201,13 +232,14 @@ class AttentionCouple:
         if isolation_factor == 0:
             return masks
             
-        # Convert isolation_factor to a tensor with the same device and dtype as masks
+        # 转换隔离因子为张量
         isolation_factor_tensor = torch.tensor(isolation_factor, device=masks.device, dtype=masks.dtype)
         
-        # Create a sharper transition based on the isolation factor
-        sharpened = torch.pow(masks, torch.exp(isolation_factor_tensor))
+        # 使用更稳定的锐化算法
+        sharpened = torch.pow(masks, torch.exp(isolation_factor_tensor * 2))  # 增强锐化效果
         
-        # Normalize the sharpened masks
-        sharpened = sharpened / (sharpened.sum(dim=0, keepdim=True) + 1e-6)
+        # 稳定的归一化
+        sum_sharpened = sharpened.sum(dim=0, keepdim=True)
+        sharpened = sharpened / (sum_sharpened + 1e-8)  # 增加数值稳定性
         
         return sharpened

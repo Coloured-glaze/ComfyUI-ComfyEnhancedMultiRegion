@@ -1,7 +1,12 @@
 import math
 import torch
+import logging
+from typing import Dict, Any
 from nodes import MAX_RESOLUTION, ConditioningCombine, ConditioningSetMask
 from .attention_couple import AttentionCouple
+
+# 配置日志
+logger = logging.getLogger(__name__)
 
 
 def validate_size(width, height):
@@ -14,8 +19,11 @@ def validate_size(width, height):
     return width, height
 
 class ComfyMultiRegion:
+    """多区域处理节点，提供水平或垂直的区域分割功能"""
+    
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(cls) -> Dict[str, Dict[str, Any]]:
+        """定义输入类型"""
         return {
             "required": {
                 "model": ("MODEL",),
@@ -39,7 +47,12 @@ class ComfyMultiRegion:
     CATEGORY = "loaders"
 
     def process(self, model, negative, orientation, num_regions, width, height, isolation_factor, **kwargs):
+        """处理多区域生成"""
         try:
+            # 检查CUDA内存
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
             positives = [kwargs.get(f"positive_{i+1}") for i in range(num_regions)]
             ratios = [kwargs.get(f"ratio_{i+1}", 1.0 / num_regions) for i in range(num_regions - 1)]
             weights = [kwargs.get(f"weight_{i+1}", 1.0) for i in range(num_regions)]
@@ -50,6 +63,8 @@ class ComfyMultiRegion:
             # Normalize ratios
             ratios.append(max(0, 1.0 - sum(ratios)))  # Ensure non-negative
             total = sum(ratios)
+            if total <= 0:
+                raise ValueError("Ratio total must be positive")
             ratios = [r / total for r in ratios]
 
             # Create masks for each region
@@ -65,9 +80,12 @@ class ComfyMultiRegion:
                 positive_combined = ConditioningCombine().combine(positive_combined, mask)[0]
 
             return AttentionCouple().attention_couple(model, positive_combined, negative, "Attention", isolation_factor)
+        except torch.cuda.OutOfMemoryError:
+            logger.error("CUDA内存不足，请尝试减小区域数量或图像尺寸")
+            raise
         except Exception as e:
-            print(f"An error occurred: {str(e)}")
-            return None, None, None
+            logger.error(f"多区域处理过程中发生错误: {e}")
+            raise
 
     @staticmethod
     def create_masks(ratios, orientation, width, height):
@@ -89,9 +107,11 @@ class ComfyMultiRegion:
         return masks
 
 class ComfyCoupleRegion:
+    """单个区域处理节点，用于定义一个带掩码的区域"""
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls) -> Dict[str, Dict[str, Any]]:
+        """定义输入类型"""
         return {
             "required": {
                 "positive": ("CONDITIONING",),
@@ -182,3 +202,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ComfyCoupleMask": "Comfy Couple Mask",
     "ComfyCoupleRegion": "Comfy Couple Region",
 }
+
+# 导出所有必要的类和函数
+__all__ = ["AttentionCouple", "ComfyMultiRegion", "ComfyCoupleMask", "ComfyCoupleRegion", 
+           "NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
