@@ -6,6 +6,7 @@ import logging
 from typing import List, Tuple, Union
 
 import comfy
+import comfy.model_management
 from comfy.ldm.modules.attention import optimized_attention
 
 # 配置日志
@@ -73,11 +74,11 @@ class AttentionCouple:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": ("MODEL", ),
-                "positive": ("CONDITIONING",),
-                "negative": ("CONDITIONING",),
-                "mode": (["Attention", "Latent"], ),
-                "isolation_factor": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "model": ("MODEL", {"tooltip": "要应用注意力耦合的模型"}),
+                "positive": ("CONDITIONING", {"tooltip": "正面提示词条件，用于生成图像"}),
+                "negative": ("CONDITIONING", {"tooltip": "负面提示词条件，用于避免生成的内容"}),
+                "mode": (["Attention", "Latent"], {"tooltip": "耦合模式：Attention=注意力耦合，Latent=潜在空间耦合"}),
+                "isolation_factor": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "隔离因子：0=无隔离，1=完全隔离，控制区域间的独立性"}),
             }
         }
     RETURN_TYPES = ("MODEL", "CONDITIONING", "CONDITIONING")
@@ -90,9 +91,8 @@ class AttentionCouple:
         if mode == "Latent":
             return (model, positive, negative)
 
-        # 检查CUDA内存
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        # 清理CUDA内存
+        comfy.model_management.soft_empty_cache()
             
         self.negative_positive_masks = []
         self.negative_positive_conds = []
@@ -187,7 +187,6 @@ class AttentionCouple:
                 for cond in self.negative_positive_conds[1]
             ], dim=0)
 
-
             k_uncond = module.to_k(context_uncond)
             k_cond = module.to_k(context_cond)
             v_uncond = module.to_v(context_uncond)
@@ -235,11 +234,35 @@ class AttentionCouple:
         # 转换隔离因子为张量
         isolation_factor_tensor = torch.tensor(isolation_factor, device=masks.device, dtype=masks.dtype)
         
-        # 使用更稳定的锐化算法
-        sharpened = torch.pow(masks, torch.exp(isolation_factor_tensor * 2))  # 增强锐化效果
+        # 增强锐化算法，使效果更明显
+        # 使用更大的指数范围和更强的对比度增强
+        exponent = 1.0 + isolation_factor_tensor * 9.0  # 范围从1到10
+        sharpened = torch.pow(masks, exponent)
         
-        # 稳定的归一化
+        # 应用对比度增强
+        if isolation_factor > 0.5:
+            # 对于高隔离因子，进一步增强对比度
+            contrast_factor = (isolation_factor_tensor - 0.5) * 4.0  # 范围从0到2
+            mean_val = torch.mean(sharpened, dim=0, keepdim=True)
+            sharpened = mean_val + (sharpened - mean_val) * (1.0 + contrast_factor)
+        
+        # 稳定的归一化，但保留一定的对比度
         sum_sharpened = sharpened.sum(dim=0, keepdim=True)
-        sharpened = sharpened / (sum_sharpened + 1e-8)  # 增加数值稳定性
         
-        return sharpened
+        # 避免除零，同时保持最小值
+        sum_sharpened = torch.clamp(sum_sharpened, min=1e-8)
+        
+        # 归一化，但应用一个保留对比度的因子
+        normalized = sharpened / sum_sharpened
+        
+        # 对于高隔离因子，进一步锐化边界
+        if isolation_factor > 0.7:
+            # 应用阈值处理来锐化边界
+            threshold = 0.2 / isolation_factor_tensor  # 随隔离因子增加而降低的阈值
+            normalized = torch.where(normalized > threshold, normalized, normalized * 0.1)
+            # 重新归一化
+            sum_norm = normalized.sum(dim=0, keepdim=True)
+            sum_norm = torch.clamp(sum_norm, min=1e-8)
+            normalized = normalized / sum_norm
+        
+        return normalized
