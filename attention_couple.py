@@ -84,7 +84,7 @@ class AttentionCouple:
     RETURN_TYPES = ("MODEL", "CONDITIONING", "CONDITIONING")
     RETURN_NAMES = ("model", "positive", "negative")
     FUNCTION = "attention_couple"
-    CATEGORY = "loaders"
+    CATEGORY = "MultiRegion"
 
     def attention_couple(self, model, positive, negative, mode, isolation_factor):
         """注意力耦合主方法，添加了错误处理和内存管理"""

@@ -36,18 +36,18 @@ class ComfyMultiRegion:
                 "height": ("INT", {"default": 512, "min": 16, "max": MAX_RESOLUTION, "step": 8, "tooltip": "生成图像的高度（必须是8的倍数）"}),
                 "isolation_factor": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "隔离因子：0=无隔离，1=完全隔离，控制区域间的独立性"}),
             },
-            "optional": {
+            # "optional": {
                 # 以下代码 js 端已经定义
                 # **{f"positive_{i+1}": ("CONDITIONING",) for i in range(10)},
                 # **{f"ratio_{i+1}": ("FLOAT", {"default": 0.5, "min": 0, "max": 1.0, "step": 0.01}) for i in range(10)},
                 # **{f"weight_{i+1}": ("FLOAT", {"default": 1.0, "min": 0, "max": 10.0, "step": 0.1}) for i in range(10)}
-            }
+            # }
         }
 
     RETURN_TYPES = ("MODEL", "CONDITIONING", "CONDITIONING",)
     RETURN_NAMES = ("model", "positive", "negative",)
     FUNCTION = "process"
-    CATEGORY = "loaders"
+    CATEGORY = "MultiRegion"
 
     def process(self, model, negative, orientation, num_regions, width, height, isolation_factor, **kwargs):
         """处理多区域生成"""
@@ -128,7 +128,7 @@ class ComfyCoupleRegion:
     RETURN_TYPES = ("ATTENTION_COUPLE_REGION",)
     RETURN_NAMES = ("region",)
     FUNCTION = "process"
-    CATEGORY = "loaders"
+    CATEGORY = "MultiRegion"
 
     def process(self, positive, mask, weight):
         return ({"positive": positive, "mask": mask, "weight": weight},)
@@ -146,14 +146,13 @@ class ComfyCoupleMask:
                 "inputcount": ("INT", {"default": 2, "min": 2, "max": 256, "step": 1, "tooltip": "要组合的区域数量"}),
                 "region_1": ("ATTENTION_COUPLE_REGION", {"tooltip": "第一个区域定义"}),
                 "region_2": ("ATTENTION_COUPLE_REGION", {"tooltip": "第二个区域定义"}),
-
             }
         }
 
     RETURN_TYPES = ( "MODEL", "CONDITIONING", "CONDITIONING", )
     RETURN_NAMES = ("model", "positive", "negative")
     FUNCTION = "process"
-    CATEGORY = "loaders"
+    CATEGORY = "MultiRegion"
 
     def process(self, model, inputcount, negative, isolation_factor, **kwargs):
 

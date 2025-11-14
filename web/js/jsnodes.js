@@ -183,10 +183,10 @@ class NodeManager {
 const nodeManager = new NodeManager();
 
 app.registerExtension({
-    name: "loaders.jsnodes.ComfyCoupleMask",
+    name: "MultiRegion.jsnodes.ComfyCoupleMask",
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
-        // 检查分类，支持英文和中文
-        if (!nodeData?.category?.startsWith("loaders") && !nodeData?.category?.startsWith("加载器")) {
+        // 检查分类
+        if (!nodeData?.category?.startsWith("MultiRegion")) {
             return;
         }
 
@@ -250,23 +250,7 @@ app.registerExtension({
             nodeType.prototype.onNodeCreated = function () {
                 onNodeCreated?.apply(this, arguments);
 
-                // 添加更新按钮
-                this.addWidget("button", "Update Regions", null, () => {
-                    updateRegions(this);
-                });
-
-                // 初始化区域
-                const countWidget = nodeManager.findWidget(this, "num_regions");
-                if (countWidget) {
-                    // 设置默认值为2
-                    if (countWidget.value === undefined) {
-                        countWidget.value = 2;
-                    }
-                    // 初始化创建区域
-                    updateRegions(this);
-                }
-
-                // 区域更新函数
+                // 区域更新函数 - 移到函数定义的最前面
                 const updateRegions = NodeUtils.debounce((node) => {
                     nodeManager.safeUpdateNode(node, (node) => {
                         const countWidget = nodeManager.findWidget(node, "num_regions");
@@ -340,6 +324,22 @@ app.registerExtension({
                         
                     }, "ComfyMultiRegion update regions");
                 }, 300);
+
+                // 添加更新按钮
+                this.addWidget("button", "Update Regions", null, () => {
+                    updateRegions(this);
+                });
+
+                // 初始化区域
+                const countWidget = nodeManager.findWidget(this, "num_regions");
+                if (countWidget) {
+                    // 设置默认值为2
+                    if (countWidget.value === undefined) {
+                        countWidget.value = 2;
+                    }
+                    // 初始化创建区域
+                    updateRegions(this);
+                }
                 
                 // 将更新函数附加到节点实例
                 this.updateRegions = updateRegions;
